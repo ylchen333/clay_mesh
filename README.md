@@ -2,7 +2,7 @@
 
 An in-browser tool for intuitive 3D asset creation using Three.js and MediaPipe hand tracking.
 
-**Live site:** https://ylchen333.github.io/clay_mesh/
+**Live site:** https://clay.loriechen.com/
 
 The site deploys automatically to GitHub Pages when changes are pushed to `main`.
 
