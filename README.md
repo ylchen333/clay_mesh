@@ -1,4 +1,10 @@
- # three.js browser app for simple 3D asset creation
+# Clay Mesh
+
+An in-browser tool for intuitive 3D asset creation using Three.js and MediaPipe hand tracking.
+
+**Live site:** https://ylchen333.github.io/clay_mesh/
+
+The site deploys automatically to GitHub Pages when changes are pushed to `main`.
 
 <!-- probably good for intuitive mesh manipulation, might result in abstract or unique looking assets -->
 
