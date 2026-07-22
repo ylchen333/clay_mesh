@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#171614" />
+    <title>Clay Mesh — gesture ceramic studio</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preconnect" href="https://storage.googleapis.com" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="studio">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Clay Mesh home">
+          <span class="brand-mark"></span>
+          <span>CLAY MESH</span>
+        </a>
+        <div class="status" id="status" role="status">
+          <span class="status-dot"></span><span id="statusText">Mouse mode ready</span>
+        </div>
+        <button class="button button-primary" id="cameraButton">Enable hand tracking</button>
+      </header>
+
+      <section class="workspace" aria-label="3D ceramic workspace">
+        <aside class="panel tools-panel">
+          <p class="eyebrow">Add a mesh</p>
+          <div class="segmented" role="group" aria-label="Primitive shape">
+            <button class="shape-button active" data-shape="sphere" aria-pressed="true">+ Sphere</button>
+            <button class="shape-button" data-shape="cube" aria-pressed="false">+ Cube</button>
+          </div>
+
+          <div class="control-group">
+            <div class="control-heading"><label for="strength">Sculpt strength</label><output id="strengthValue">42%</output></div>
+            <input id="strength" type="range" min="5" max="100" value="42" />
+          </div>
+          <div class="control-group">
+            <div class="control-heading"><label for="radius">Brush radius</label><output id="radiusValue">24%</output></div>
+            <input id="radius" type="range" min="8" max="60" value="24" />
+          </div>
+
+          <div class="mode-switch" role="group" aria-label="Sculpt direction">
+            <button class="mode-button active" data-mode="push">Push</button>
+            <button class="mode-button" data-mode="pull">Pull</button>
+          </div>
+
+          <button class="button button-secondary full" id="resetButton">Reset form</button>
+          <p class="hint">Mouse: drag the form to orbit. Hold <kbd>Shift</kbd> and drag over it to sculpt.</p>
+        </aside>
+
+        <div class="viewport" id="viewport">
+          <video id="webcam" autoplay muted playsinline aria-label="Live webcam background"></video>
+          <canvas id="handCanvas" aria-hidden="true"></canvas>
+          <div class="viewport-label"><span>LIVE FORM</span><span id="vertexCount">0 vertices</span></div>
+          <canvas id="sceneCanvas" aria-label="Interactive 3D form"></canvas>
+          <div class="brush-cursor" id="brushCursor"></div>
+          <div class="tracking-badge" id="handCount" hidden>Looking for hands…</div>
+          <div class="gesture-readout" id="gestureReadout">Move a hand into frame</div>
+        </div>
+
+        <aside class="panel guide-panel">
+          <p class="eyebrow">Hand gestures</p>
+          <ol class="gesture-list">
+            <li><span class="gesture-icon">01</span><div><strong>Shape</strong><p>Point at the form. Move closer to push or pull its surface.</p></div></li>
+            <li><span class="gesture-icon">02</span><div><strong>Rotate</strong><p>Pinch thumb + index, then move your hand.</p></div></li>
+            <li><span class="gesture-icon">03</span><div><strong>Translate</strong><p>Pinch thumb + middle, then move left, right, up or down.</p></div></li>
+          </ol>
+          <div class="orientation">
+            <span class="mini-axes"><i class="axis-x"></i><i class="axis-y"></i></span>
+            <div><strong>Set orientation</strong><p>Use the axes in the viewport before export.</p></div>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="export-bar">
+        <div><p class="eyebrow">Ready to keep?</p><strong>Export your watertight form</strong></div>
+        <div class="export-actions">
+          <button class="button button-secondary" id="stlButton">Export STL</button>
+          <button class="button button-primary" id="glbButton">Export GLB</button>
+        </div>
+      </footer>
+    </main>
+    <script type="module" src="ceramic_studio.js"></script>
+  </body>
+</html>
