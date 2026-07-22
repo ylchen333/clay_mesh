@@ -27,6 +27,8 @@ button { color:inherit; }
 input[type="range"] { width:100%; margin:14px 0 0; accent-color:var(--clay); }
 .mode-switch { margin:24px 0 14px; }
 .full { width:100%; }
+.normals-toggle { margin-top:9px; }
+.normals-toggle.active { border-color:#8fc7e8; color:#a9dcfa; background:rgba(87,167,211,.1); }
 .hint { margin:18px 2px; color:var(--muted); font-size:11px; line-height:1.6; }
 kbd { padding:2px 5px; border:1px solid var(--line); border-radius:3px; font:10px monospace; }
 .viewport { position:relative; overflow:hidden; min-width:0; background:radial-gradient(circle at 50% 40%,#33302b 0,#24221f 45%,#1b1a18 78%); isolation:isolate; }
@@ -44,6 +46,8 @@ kbd { padding:2px 5px; border:1px solid var(--line); border-radius:3px; font:10p
 .gesture-list { margin:0; padding:0; list-style:none; }
 .gesture-list li { display:flex; gap:13px; padding:18px 0; border-bottom:1px solid var(--line); }
 .gesture-icon { display:grid; place-items:center; flex:0 0 32px; height:32px; border:1px solid var(--line); border-radius:50%; color:var(--clay); font:10px monospace; }
+.gesture-icon.left-role { color:#86d5ff; border-color:rgba(134,213,255,.36); }
+.gesture-icon.right-role { color:#ff9868; border-color:rgba(255,152,104,.36); }
 .gesture-list strong,.orientation strong { font-size:12px; }
 .gesture-list p,.orientation p { margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.45; }
 .orientation { display:flex; gap:14px; margin-top:26px; align-items:center; }

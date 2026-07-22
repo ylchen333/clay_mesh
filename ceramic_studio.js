@@ -37,12 +37,21 @@ function showContact(hit,state='hover'){
   contactNormal.copy(hit.face.normal).transformDirection(mesh.matrixWorld).normalize();
   contactMarker.position.addScaledVector(contactNormal,.012);contactMarker.quaternion.setFromUnitVectors(zAxis,contactNormal);
   const brushRadius=Number($('#radius').value)/60;contactRing.scale.setScalar(brushRadius);contactDot.position.z=.012;
-  const color=state==='active'?0xff8a55:state==='blocked'?0xff4f4f:0xf5e8d5;
+  const color=state==='active'?0xff8a55:state==='pull'?0x76d6ff:state==='blocked'?0xff4f4f:0xf5e8d5;
   contactMaterial.color.setHex(color);contactDot.material.color.setHex(color);contactMaterial.opacity=state==='hover'?.58:.95;
 }
 
-let mesh, baseGeometry, restPositions, currentShape = 'sphere', sculptMode = 'push';
+let mesh, baseGeometry, restPositions, currentShape = 'sphere', sculptMode = 'push', normalSurfaceVisible = false;
 const clay = new THREE.MeshStandardMaterial({ color:0xc8754e, roughness:.72, metalness:.02, flatShading:false });
+const normalSurface = new THREE.ShaderMaterial({
+  vertexShader:`varying vec3 vNormal; void main(){vNormal=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`
+    varying vec3 vNormal;
+    vec3 hsv2rgb(vec3 c){vec3 p=abs(fract(c.xxx+vec3(0.0,0.6666667,0.3333333))*6.0-3.0);return c.z*mix(vec3(1.0),clamp(p-1.0,0.0,1.0),c.y);}
+    void main(){vec3 n=normalize(vNormal);float hue=fract(atan(n.y,n.x)/6.2831853+0.5);float value=0.72+0.28*abs(n.z);gl_FragColor=vec4(hsv2rgb(vec3(hue,0.82,value)),1.0);}
+  `,
+  side:THREE.FrontSide
+});
 function geometryFor(shape) {
   const source=shape==='cube'?new THREE.BoxGeometry(2.15,2.15,2.15,28,28,28):new THREE.IcosahedronGeometry(1.35,5);
   // Face-specific UVs and normals prevent coincident boundary vertices from
@@ -67,7 +76,7 @@ function makeForm(shape) {
   if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
   contactMarker.visible=false;
   currentShape = shape; baseGeometry = geometryFor(shape); baseGeometry.computeVertexNormals();
-  mesh = new THREE.Mesh(baseGeometry.clone(), clay); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+  mesh = new THREE.Mesh(baseGeometry.clone(),normalSurfaceVisible?normalSurface:clay);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
   restPositions=mesh.geometry.attributes.position.array.slice();
   $('#vertexCount').textContent = `${mesh.geometry.attributes.position.count.toLocaleString()} vertices`;
 }
@@ -87,13 +96,13 @@ function hitAt(x, y) {
   const r = canvas.getBoundingClientRect(); pointer.set(((x-r.left)/r.width)*2-1, -((y-r.top)/r.height)*2+1);
   raycaster.setFromCamera(pointer, camera); return raycaster.intersectObject(mesh, false)[0];
 }
-function sculpt(hit, pressure = 1) {
+function sculpt(hit, pressure = 1, direction = sculptMode) {
   if (!hit) return false;
   const geo = mesh.geometry, pos = geo.attributes.position, normal = geo.attributes.normal;
   const before=pos.array.slice();
   const localHit = mesh.worldToLocal(hit.point.clone());
   const radius = Number($('#radius').value) / 60;
-  const strength = Number($('#strength').value) / 100 * .045 * pressure * (sculptMode === 'push' ? -1 : 1);
+  const strength = Number($('#strength').value) / 100 * .045 * pressure * (direction === 'push' ? -1 : 1);
   const p = new THREE.Vector3(), n = new THREE.Vector3(), rest = new THREE.Vector3(), delta = new THREE.Vector3();
   for (let i=0; i<pos.count; i++) {
     p.fromBufferAttribute(pos,i); const d=p.distanceTo(localHit); if(d>=radius) continue;
@@ -136,6 +145,7 @@ document.querySelectorAll('.shape-button').forEach(b=>b.addEventListener('click'
 document.querySelectorAll('.mode-button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.mode-button').forEach(x=>x.classList.toggle('active',x===b));sculptMode=b.dataset.mode;}));
 ['strength','radius'].forEach(id=>$('#'+id).addEventListener('input',e=>$('#'+id+'Value').textContent=e.target.value+'%'));
 $('#resetButton').addEventListener('click',()=>makeForm(currentShape));
+$('#normalsButton').addEventListener('click',e=>{normalSurfaceVisible=!normalSurfaceVisible;mesh.material=normalSurfaceVisible?normalSurface:clay;e.currentTarget.classList.toggle('active',normalSurfaceVisible);e.currentTarget.setAttribute('aria-pressed',normalSurfaceVisible);e.currentTarget.textContent=normalSurfaceVisible?'Use clay material':'Show rainbow normals';});
 
 function download(data,name,type) { const blob=data instanceof Blob?data:new Blob([data],{type}); const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 function exportReady(){
@@ -144,9 +154,9 @@ function exportReady(){
   return true;
 }
 $('#stlButton').addEventListener('click',()=>{if(exportReady())download(new STLExporter().parse(mesh,{binary:true}),'clay-mesh.stl','model/stl')});
-$('#glbButton').addEventListener('click',()=>{if(exportReady())new GLTFExporter().parse(mesh,data=>download(data,'clay-mesh.glb','model/gltf-binary'),e=>console.error(e),{binary:true,onlyVisible:true})});
+$('#glbButton').addEventListener('click',()=>{if(exportReady()){const displayMaterial=mesh.material;mesh.material=clay;new GLTFExporter().parse(mesh,data=>{mesh.material=displayMaterial;download(data,'clay-mesh.glb','model/gltf-binary')},e=>{mesh.material=displayMaterial;console.error(e)},{binary:true,onlyVisible:true})}});
 
-let handLandmarker, stream, tracking=false, lastVideoTime=-1, previousGesture=null;
+let handLandmarker, stream, tracking=false, lastVideoTime=-1, leftGesture=null;
 const video=$('#webcam'), overlay=$('#handCanvas'), handCount=$('#handCount'), gestureReadout=$('#gestureReadout');
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 async function enableHands() {
@@ -175,7 +185,7 @@ function disableHands(){tracking=false;stream?.getTracks().forEach(t=>t.stop());
 $('#cameraButton').addEventListener('click',()=>tracking?disableHands():enableHands());
 
 const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
-function drawHands(hands) {
+function drawHands(hands,roles=[]) {
   const rect=viewport.getBoundingClientRect(), dpr=Math.min(devicePixelRatio,2);
   overlay.width=Math.round(rect.width*dpr);overlay.height=Math.round(rect.height*dpr);
   const ctx=overlay.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,rect.width,rect.height);
@@ -183,25 +193,32 @@ function drawHands(hands) {
   const drawnW=viewRatio>videoRatio?rect.width:rect.height*videoRatio, drawnH=viewRatio>videoRatio?rect.width/videoRatio:rect.height;
   const ox=(rect.width-drawnW)/2, oy=(rect.height-drawnH)/2;
   const pt=p=>({x:ox+p.x*drawnW,y:oy+p.y*drawnH});
-  for(const hand of hands){
-    ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='rgba(232,225,213,.72)';ctx.lineWidth=1.5;
+  hands.forEach((hand,handIndex)=>{
+    const role=roles[handIndex],roleColor=role==='left'?'134,213,255':'255,152,104';
+    ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=`rgba(${roleColor},.72)`;ctx.lineWidth=1.5;
     for(const [a,b] of HAND_CONNECTIONS){const p=pt(hand[a]),q=pt(hand[b]);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();}
     const zs=hand.map(p=>p.z), near=Math.min(...zs), far=Math.max(...zs), span=Math.max(far-near,.001);
-    hand.forEach((p,i)=>{const q=pt(p),depth=1-(p.z-near)/span,isTip=[4,8,12,16,20].includes(i);ctx.beginPath();ctx.arc(q.x,q.y,(isTip?5:2.5)+depth*(isTip?6:5),0,Math.PI*2);ctx.fillStyle=i===8?`rgba(255,128,76,${.75+depth*.25})`:`rgba(255,${Math.round(160+depth*85)},${Math.round(115+depth*105)},${.5+depth*.5})`;ctx.shadowColor=i===8?'rgba(255,105,55,.9)':'rgba(255,190,135,.65)';ctx.shadowBlur=(isTip?7:0)+depth*10;ctx.fill();ctx.shadowBlur=0;if(i===8){ctx.strokeStyle='rgba(255,238,218,.9)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(q.x,q.y,12+depth*4,0,Math.PI*2);ctx.stroke();}});
-  }
+    hand.forEach((p,i)=>{const q=pt(p),depth=1-(p.z-near)/span,isTip=[4,8,12,16,20].includes(i);ctx.beginPath();ctx.arc(q.x,q.y,(isTip?5:2.5)+depth*(isTip?6:5),0,Math.PI*2);ctx.fillStyle=`rgba(${roleColor},${.55+depth*.45})`;ctx.shadowColor=`rgba(${roleColor},.85)`;ctx.shadowBlur=(isTip?7:0)+depth*10;ctx.fill();ctx.shadowBlur=0;if(i===8){ctx.strokeStyle='rgba(255,238,218,.9)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(q.x,q.y,12+depth*4,0,Math.PI*2);ctx.stroke();}});
+  });
 }
-function applyHand(hand) {
-  const thumb=hand[4], index=hand[8], middle=hand[12], palm=hand[0];
+function applyTransformHand(hand) {
+  const thumb=hand[4],index=hand[8],middle=hand[12];
   const scale=Math.max(dist(hand[5],hand[17]),.04), indexPinch=dist(thumb,index)/scale<.38, middlePinch=dist(thumb,middle)/scale<.38;
-  const x=1-index.x,y=index.y; let gesture='Sculpting surface';
-  if(indexPinch){gesture='Rotate';contactMarker.visible=false;if(previousGesture?.type==='rotate'){mesh.rotation.y+=(x-previousGesture.x)*5;mesh.rotation.x+=(y-previousGesture.y)*4;}previousGesture={type:'rotate',x,y};}
-  else if(middlePinch){gesture='Translate';contactMarker.visible=false;if(previousGesture?.type==='translate'){mesh.position.x+=(x-previousGesture.x)*3.5;mesh.position.y-=(y-previousGesture.y)*3.5;}previousGesture={type:'translate',x,y};}
-  else {
-    const depth=palm.z-index.z;previousGesture={type:'sculpt',x,y};
-    const r=canvas.getBoundingClientRect(),hit=hitAt(r.left+x*r.width,r.top+y*r.height);
-    if(depth>.055){const safe=hit&&sculpt(hit,THREE.MathUtils.clamp((depth-.04)*9,.2,1.25));showContact(hit,safe?'active':'blocked');gesture=hit?(safe?'Sculpting surface':'Deformation limit reached'):'Point at the form';}
-    else {showContact(hit,'hover');gesture=hit?'Contact preview · move fingertip closer':'Point at the form';}
-  }
-  gestureReadout.textContent=gesture;
+  const x=1-index.x,y=index.y;
+  if(indexPinch){if(leftGesture?.type==='rotate'){mesh.rotation.y+=(x-leftGesture.x)*5;mesh.rotation.x+=(y-leftGesture.y)*4;}leftGesture={type:'rotate',x,y};return 'Left hand · rotating';}
+  if(middlePinch){if(leftGesture?.type==='translate'){mesh.position.x+=(x-leftGesture.x)*3.5;mesh.position.y-=(y-leftGesture.y)*3.5;}leftGesture={type:'translate',x,y};return 'Left hand · translating';}
+  leftGesture=null;return 'Left hand · pinch to transform';
 }
-function trackHands(){if(!tracking)return;if(video.currentTime!==lastVideoTime){lastVideoTime=video.currentTime;const result=handLandmarker.detectForVideo(video,performance.now());drawHands(result.landmarks);handCount.textContent=result.landmarks.length?`${result.landmarks.length} hand${result.landmarks.length>1?'s':''} · depth active`:'Looking for hands…';if(result.landmarks[0])applyHand(result.landmarks[0]);else{previousGesture=null;contactMarker.visible=false;}}requestAnimationFrame(trackHands);}
+function applySculptHand(hand) {
+    const thumb=hand[4],index=hand[8],palm=hand[0],x=1-index.x,y=index.y,depth=palm.z-index.z;
+    const scale=Math.max(dist(hand[5],hand[17]),.04),isPulling=dist(thumb,index)/scale<.38,direction=isPulling?'pull':'push';
+    const r=canvas.getBoundingClientRect(),hit=hitAt(r.left+x*r.width,r.top+y*r.height);let gesture;
+    if(depth>.055){const safe=hit&&sculpt(hit,THREE.MathUtils.clamp((depth-.04)*9,.2,1.25),direction);showContact(hit,safe?(isPulling?'pull':'active'):'blocked');gesture=hit?(safe?(isPulling?'Pulling surface':'Pushing surface'):'Deformation limit reached'):'Point at the form';}
+    else {showContact(hit,'hover');gesture=hit?`${isPulling?'Pull':'Push'} preview · move fingertip closer`:'Point at the form';}
+    return `Right hand · ${gesture}`;
+}
+function physicalRoles(result){
+  const handedness=result.handedness??result.handednesses??[];
+  return result.landmarks.map((_,i)=>{const label=(handedness[i]?.[0]?.categoryName??handedness[i]?.[0]?.displayName??'').toLowerCase();return label==='left'||label==='right'?label:null;});
+}
+function trackHands(){if(!tracking)return;if(video.currentTime!==lastVideoTime){lastVideoTime=video.currentTime;const result=handLandmarker.detectForVideo(video,performance.now()),roles=physicalRoles(result);drawHands(result.landmarks,roles);handCount.textContent=result.landmarks.length?`${roles.includes('left')?'L transform ':''}${roles.includes('right')?'R sculpt':''}`.trim()||`${result.landmarks.length} hand${result.landmarks.length>1?'s':''}`:'Looking for hands…';const leftIndex=roles.indexOf('left'),rightIndex=roles.indexOf('right'),messages=[];if(leftIndex>=0)messages.push(applyTransformHand(result.landmarks[leftIndex]));else leftGesture=null;if(rightIndex>=0)messages.push(applySculptHand(result.landmarks[rightIndex]));else contactMarker.visible=false;gestureReadout.textContent=messages.join(' · ')||'Show both hands to begin';}requestAnimationFrame(trackHands);}
